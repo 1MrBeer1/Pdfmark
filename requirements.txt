@@ -1,0 +1,10 @@
+pymupdf
+pdfplumber
+pillow
+tqdm
+fastapi
+uvicorn
+python-multipart
+pytesseract
+pytest
+reportlab
