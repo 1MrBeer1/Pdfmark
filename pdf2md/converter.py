@@ -6,6 +6,7 @@ from pathlib import Path
 import logging
 import os
 import tempfile
+import itertools
 from typing import Optional
 
 from PIL import Image
@@ -100,6 +101,8 @@ def _convert_with_config(
 
         assets_rel_dir = _relative_assets_dir(config.out_path, config.assets_dir)
         page_markdown: list[str] = []
+        image_counter = itertools.count(1)
+        table_counter = itertools.count(1)
 
         for page_index in range(total_pages):
             page_num = page_index + 1
@@ -121,7 +124,16 @@ def _convert_with_config(
 
             text_chars = sum(len(block.text) for block in text_blocks)
 
-            images = extract_images(doc, page, config.assets_dir, page_num, text_blocks, assets_rel_dir, logger=logger)
+            images = extract_images(
+                doc,
+                page,
+                config.assets_dir,
+                page_num,
+                text_blocks,
+                assets_rel_dir,
+                logger=logger,
+                counter=image_counter,
+            )
             tables = extract_tables(
                 page_plumber,
                 page,
@@ -132,6 +144,7 @@ def _convert_with_config(
                 config.md_format,
                 temp_dir=temp_dir,
                 logger=logger,
+                counter=table_counter,
             )
 
             page_md = assemble_page_markdown(

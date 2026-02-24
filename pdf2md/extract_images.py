@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import io
 import re
+import itertools
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Iterator
 
 from PIL import Image
 
@@ -29,10 +30,11 @@ def extract_images(
     text_blocks: List[TextBlock],
     rel_assets_dir: str,
     logger=None,
+    counter: Optional[Iterator[int]] = None,
 ) -> List[ImageItem]:
     images: List[ImageItem] = []
+    counter = counter or itertools.count(1)
     image_list = page.get_images(full=True)
-    img_index = 0
 
     for image in image_list:
         xref = image[0]
@@ -40,7 +42,7 @@ def extract_images(
         if not rects:
             rects = [None]
         for rect in rects:
-            img_index += 1
+            img_index = next(counter)
             try:
                 image_info = doc.extract_image(xref)
                 img_bytes = image_info.get("image", b"")
@@ -54,7 +56,7 @@ def extract_images(
                     logger.warning("Failed to extract image on page %d: %s", page_num, exc)
                 continue
 
-            filename = f"page_{page_num}_img_{img_index}.png"
+            filename = f"img_{img_index:04d}.png"
             out_path = assets_dir / filename
             image_obj.save(out_path, format="PNG")
 
@@ -70,7 +72,7 @@ def extract_images(
 
 
 def _find_caption(rect, text_blocks: List[TextBlock], page_num: int, img_index: int) -> str:
-    default = f"image page {page_num} {img_index}"
+    default = f"image {img_index}"
     if rect is None:
         return default
 

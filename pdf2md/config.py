@@ -39,8 +39,7 @@ def resolve_output_paths(input_path: Path, out_path: Optional[Path], assets_dir:
     if out_path is None:
         out_path = input_path.with_suffix(".md")
     if assets_dir is None:
-        stem = out_path.with_suffix("")
-        assets_dir = Path(f"{stem}_assets")
+        assets_dir = out_path.with_name("media")
     return out_path, assets_dir
 
 

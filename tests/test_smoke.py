@@ -2,6 +2,8 @@ import re
 from pathlib import Path
 
 from pdf2md.converter import convert_pdf
+from pdf2md.extract_text import extract_text_blocks
+from pdf2md.splitter import split_markdown
 
 
 def _create_sample_pdf(pdf_path: Path) -> None:
@@ -48,7 +50,7 @@ def test_smoke(tmp_path: Path) -> None:
     _create_sample_pdf(pdf_path)
 
     out_path = tmp_path / "output.md"
-    assets_dir = tmp_path / "output_assets"
+    assets_dir = tmp_path / "media"
 
     report = convert_pdf(
         input_path=pdf_path,
@@ -69,3 +71,45 @@ def test_smoke(tmp_path: Path) -> None:
 
     for rel_path in image_links:
         assert (out_path.parent / rel_path).exists()
+
+
+def test_filters_page_number_block() -> None:
+    page_dict = {
+        "blocks": [
+            {
+                "type": 0,
+                "bbox": (0, 0, 10, 10),
+                "lines": [
+                    {
+                        "spans": [
+                            {"text": "28", "size": 12, "bbox": (0, 0, 5, 5), "flags": 0},
+                        ]
+                    }
+                ],
+            }
+        ]
+    }
+    blocks = extract_text_blocks(page_dict)
+    assert blocks == []
+
+
+def test_splitter_skips_preface(tmp_path: Path) -> None:
+    md = """# Титульный лист
+Some preface text.
+# Содержание
+- item
+# Введение
+Intro body.
+# Глава 1. Основы
+Chapter text.
+# Приложение A
+Appendix text.
+"""
+    md_path = tmp_path / "out.md"
+    md_path.write_text(md, encoding="utf-8")
+
+    parts = split_markdown(md_path)
+    names = [p.name for p in parts]
+    assert names[0] == "Vvedenie.md"
+    assert "g1.md" in names
+    assert any(n.startswith("pril") for n in names)

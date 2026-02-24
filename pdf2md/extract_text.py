@@ -8,6 +8,7 @@ from statistics import median
 from typing import Iterable, List, Tuple
 
 LIST_ITEM_RE = re.compile(r"^\s*(?:[-*\u2022]|\d+\.)\s+")
+PAGE_NUM_RE = re.compile(r"^(?:стр\.?\s*)?\d{1,4}(?:\s*/\s*\d{1,4})?$", re.IGNORECASE)
 
 
 @dataclass
@@ -32,6 +33,8 @@ def extract_text_blocks(page_dict: dict) -> List[TextBlock]:
             continue
         normalized = _normalize_lines(lines_text)
         if not normalized.strip():
+            continue
+        if _is_page_number(normalized):
             continue
         heading_level = _classify_heading(max_size, body_size, normalized, bold_ratio)
         if heading_level:
@@ -282,3 +285,10 @@ def _looks_like_heading(text: str) -> bool:
         return False
     upper = sum(1 for c in letters if c.isupper())
     return (upper / len(letters)) >= 0.6
+
+
+def _is_page_number(text: str) -> bool:
+    """Detect standalone page number blocks to skip them."""
+    single = text.strip()
+    single = single.lstrip("#").strip()
+    return bool(PAGE_NUM_RE.match(single))

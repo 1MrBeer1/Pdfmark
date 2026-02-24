@@ -16,7 +16,7 @@ python pdf_to_md.py input.pdf --out output.md --assets output_assets --format gi
 
 Options:
 - --out PATH (default: input.md next to input)
-- --assets DIR (default: <out>_assets)
+- --assets DIR (default: media next to the output)
 - --format {github,gfm,obsidian}
 - --dpi INT (default: 200)
 - --ocr {auto,off,always}
@@ -40,7 +40,7 @@ If OCR is set to auto, it runs only on pages with low text density and large ima
 ## Output
 
 - output.md: markdown with page separators and inline image/table references
-- output_assets/: extracted images and table snapshots
+- media/: extracted images and table snapshots
 
 ## Limitations and quality tips
 

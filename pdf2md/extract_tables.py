@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Iterator
+import itertools
 
 from PIL import Image
 
@@ -28,8 +29,10 @@ def extract_tables(
     md_format: str,
     temp_dir: Optional[Path] = None,
     logger=None,
+    counter: Optional[Iterator[int]] = None,
 ) -> List[TableItem]:
     tables: List[TableItem] = []
+    counter = counter or itertools.count(1)
 
     table_settings = {
         "vertical_strategy": "lines",
@@ -49,9 +52,8 @@ def extract_tables(
     if not found_tables:
         return tables
 
-    table_index = 0
     for table in found_tables:
-        table_index += 1
+        table_index = next(counter)
         bbox = tuple(table.bbox)
         rows = table.extract() or []
         if not _is_table_quality_good(rows):
@@ -177,7 +179,7 @@ def _render_table_image(
         return None
 
     cropped = image.crop((left, top, right, bottom))
-    filename = f"page_{page_num}_table_{table_index}.png"
+    filename = f"table_{table_index:04d}.png"
     out_path = assets_dir / filename
     cropped.save(out_path, format="PNG")
 
@@ -186,7 +188,7 @@ def _render_table_image(
         image.save(temp_path, format="PNG")
 
     rel_path = _join_rel_path(rel_assets_dir, filename)
-    alt_text = f"table page {page_num} {table_index}"
+    alt_text = f"table {table_index}"
     return TableItem(kind="image", markdown=None, rel_path=rel_path, bbox=bbox, alt_text=alt_text)
 
 

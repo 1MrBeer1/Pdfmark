@@ -12,4 +12,6 @@ dist/
 *.tmp
 *.pdf
 *_assets/
+media/
+*_media/
 output*.md

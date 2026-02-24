@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from .config import ConversionError, DependencyError, setup_logger
 from .converter import convert_pdf
+from .splitter import split_markdown
 
 app = FastAPI(title="pdf2md")
 
@@ -300,7 +301,7 @@ def convert(
     work_dir = Path(tempfile.mkdtemp(prefix=f"pdf2md_{job_id}_"))
     pdf_path = work_dir / "input.pdf"
     out_path = work_dir / "output.md"
-    assets_dir = work_dir / "output_assets"
+    assets_dir = work_dir / "media"
 
     with pdf_path.open("wb") as f:
         f.write(file.file.read())
@@ -330,9 +331,12 @@ def convert(
         error_text = html.escape(f"Unexpected error: {exc}")
         return ERROR_TEMPLATE.safe_substitute(error=error_text, log=log_text)
 
+    split_files = split_markdown(out_path)
+
     zip_path = work_dir / "result.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        zipf.write(out_path, out_path.name)
+        for md_file in split_files:
+            zipf.write(md_file, md_file.name)
         if assets_dir.exists():
             for asset in assets_dir.iterdir():
                 if asset.is_file():
