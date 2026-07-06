@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from tqdm import tqdm
 
-from .config import ConversionError, DependencyError, setup_logger
+from .config import ConversionError, DependencyError, resolve_output_paths, setup_logger
 from .converter import convert_pdf
+from .splitter import split_markdown
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -23,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ocr", choices=["auto", "off", "always"], default="auto")
     parser.add_argument("--max-pages", type=int, default=None)
     parser.add_argument("--keep-temp", action="store_true")
+    parser.add_argument("--split", action="store_true", help="Split the output Markdown by H1 headings")
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -63,6 +66,16 @@ def main(argv: list[str] | None = None) -> int:
             progress.close()
 
     print(report.summary_text())
+    if args.split:
+        out_path, _ = resolve_output_paths(
+            Path(args.input),
+            Path(args.out) if args.out else None,
+            Path(args.assets) if args.assets else None,
+        )
+        split_files = split_markdown(out_path)
+        print("split files:")
+        for split_file in split_files:
+            print(f"- {split_file}")
     return EXIT_OK
 
 

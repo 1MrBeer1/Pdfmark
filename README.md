@@ -22,6 +22,7 @@ Options:
 - --ocr {auto,off,always}
 - --max-pages INT
 - --keep-temp
+- --split (split output Markdown by H1 headings)
 - --verbose
 
 ## Web UI
