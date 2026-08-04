@@ -19,6 +19,7 @@ class PageReport:
 @dataclass
 class ConversionReport:
     pages: List[PageReport] = field(default_factory=list)
+    processed_label: str = "pages"
 
     def add_page(self, page_report: PageReport) -> None:
         self.pages.append(page_report)
@@ -49,13 +50,14 @@ class ConversionReport:
 
     def summary_text(self) -> str:
         return (
-            "pages processed: {pages}\n"
+            "{processed_label} processed: {pages}\n"
             "chars extracted: {chars}\n"
             "images extracted: {images}\n"
             "tables as markdown: {tables_md}\n"
             "tables as images: {tables_img}\n"
             "ocr pages count: {ocr_pages}"
         ).format(
+            processed_label=self.processed_label,
             pages=self.pages_processed,
             chars=self.chars_extracted,
             images=self.images_extracted,

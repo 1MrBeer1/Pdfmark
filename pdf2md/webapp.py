@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from .config import ConversionError, DependencyError, setup_logger
-from .converter import convert_pdf
+from .converter import convert_file
 from .splitter import split_markdown
 
 app = FastAPI(title="pdf2md")
@@ -116,12 +116,12 @@ INDEX_HTML = """<!DOCTYPE html>
   <div class="wrap">
     <header>
       <h1>pdf2md</h1>
-      <p>Convert PDFs to Markdown with inline images and tables.</p>
+      <p>Convert PDFs and Word documents to Markdown with inline images and tables.</p>
     </header>
     <div class="card">
       <form action="/convert" method="post" enctype="multipart/form-data">
-        <label>PDF file
-          <input type="file" name="file" accept="application/pdf" required />
+        <label>PDF or Word file
+          <input type="file" name="file" accept="application/pdf,.pdf,.docx,.docm,.dotx,.dotm" required />
         </label>
         <label>Markdown format
           <select name="md_format">
@@ -141,7 +141,7 @@ INDEX_HTML = """<!DOCTYPE html>
           <input type="number" name="dpi" value="200" min="72" max="600" />
         </label>
         <button type="submit">Convert</button>
-        <div class="note">Large PDFs may take a while. Logs appear after conversion.</div>
+        <div class="note">Large files may take a while. Logs appear after conversion.</div>
       </form>
     </div>
   </div>
@@ -299,19 +299,20 @@ def convert(
 ) -> str:
     job_id = uuid.uuid4().hex
     work_dir = Path(tempfile.mkdtemp(prefix=f"pdf2md_{job_id}_"))
-    pdf_path = work_dir / "input.pdf"
+    suffix = Path(file.filename or "").suffix.lower()
+    input_path = work_dir / f"input{suffix or '.pdf'}"
     out_path = work_dir / "output.md"
     assets_dir = work_dir / "media"
 
-    with pdf_path.open("wb") as f:
+    with input_path.open("wb") as f:
         f.write(file.file.read())
 
     log_stream = io.StringIO()
     logger = setup_logger(name=f"pdf2md.web.{job_id}", verbose=True, stream=log_stream)
 
     try:
-        report = convert_pdf(
-            input_path=pdf_path,
+        report = convert_file(
+            input_path=input_path,
             out_path=out_path,
             assets_dir=assets_dir,
             md_format=md_format,

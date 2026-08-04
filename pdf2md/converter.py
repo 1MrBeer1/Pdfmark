@@ -7,7 +7,7 @@ import logging
 import os
 import tempfile
 import itertools
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 from PIL import Image
 
@@ -17,6 +17,54 @@ from .extract_images import extract_images
 from .extract_tables import extract_tables
 from .postprocess import assemble_page_markdown
 from .report import ConversionReport, PageReport
+
+SUPPORTED_WORD_EXTENSIONS = {".docx", ".docm", ".dotx", ".dotm"}
+
+
+def convert_file(
+    input_path: Path | str,
+    out_path: Optional[Path | str] = None,
+    assets_dir: Optional[Path | str] = None,
+    md_format: str = "github",
+    dpi: int = 200,
+    ocr: str = "auto",
+    max_pages: Optional[int] = None,
+    keep_temp: bool = False,
+    verbose: bool = False,
+    logger: Optional[logging.Logger] = None,
+    progress=None,
+) -> ConversionReport:
+    input_path = Path(input_path)
+    suffix = input_path.suffix.lower()
+    if suffix == ".pdf":
+        return convert_pdf(
+            input_path=input_path,
+            out_path=out_path,
+            assets_dir=assets_dir,
+            md_format=md_format,
+            dpi=dpi,
+            ocr=ocr,
+            max_pages=max_pages,
+            keep_temp=keep_temp,
+            verbose=verbose,
+            logger=logger,
+            progress=progress,
+        )
+    if suffix in SUPPORTED_WORD_EXTENSIONS:
+        from .word_converter import convert_docx
+
+        return convert_docx(
+            input_path=input_path,
+            out_path=out_path,
+            assets_dir=assets_dir,
+            md_format=md_format,
+            max_pages=max_pages,
+            logger=logger,
+            progress=progress,
+        )
+    if suffix == ".doc":
+        raise ConversionError("Legacy .doc files are not supported directly. Save the document as .docx and convert it again.")
+    raise ConversionError(f"Unsupported input file type: {suffix or '<none>'}. Use PDF or Word .docx files.")
 
 
 def convert_pdf(
@@ -122,18 +170,6 @@ def _convert_with_config(
                 if ocr_text:
                     text_blocks.insert(0, TextBlock(text=ocr_text.strip(), bbox=(0, 0, 0, 0), heading_level=None))
 
-            text_chars = sum(len(block.text) for block in text_blocks)
-
-            images = extract_images(
-                doc,
-                page,
-                config.assets_dir,
-                page_num,
-                text_blocks,
-                assets_rel_dir,
-                logger=logger,
-                counter=image_counter,
-            )
             tables = extract_tables(
                 page_plumber,
                 page,
@@ -146,10 +182,24 @@ def _convert_with_config(
                 logger=logger,
                 counter=table_counter,
             )
+            table_regions = [table.bbox for table in tables]
+            content_text_blocks = _filter_text_blocks_by_regions(text_blocks, table_regions)
+            text_chars = sum(len(block.text) for block in content_text_blocks)
+
+            images = extract_images(
+                doc,
+                page,
+                config.assets_dir,
+                page_num,
+                content_text_blocks,
+                assets_rel_dir,
+                logger=logger,
+                counter=image_counter,
+            )
 
             page_md = assemble_page_markdown(
                 page_num=page_num,
-                text_blocks=text_blocks,
+                text_blocks=content_text_blocks,
                 images=images,
                 tables=tables,
                 md_format=config.md_format,
@@ -242,3 +292,35 @@ def _run_ocr(page, config: ConversionConfig, logger: logging.Logger) -> str:
         return ""
 
     return text
+
+
+def _filter_text_blocks_by_regions(
+    text_blocks: Sequence[TextBlock],
+    regions: Sequence[Tuple[float, float, float, float]],
+    min_overlap_ratio: float = 0.55,
+) -> list[TextBlock]:
+    if not regions:
+        return list(text_blocks)
+
+    filtered: list[TextBlock] = []
+    for block in text_blocks:
+        block_area = _bbox_area(block.bbox)
+        if block_area <= 0:
+            filtered.append(block)
+            continue
+        if any(_overlap_area(block.bbox, region) / block_area >= min_overlap_ratio for region in regions):
+            continue
+        filtered.append(block)
+    return filtered
+
+
+def _bbox_area(bbox: Tuple[float, float, float, float]) -> float:
+    return max(0.0, bbox[2] - bbox[0]) * max(0.0, bbox[3] - bbox[1])
+
+
+def _overlap_area(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> float:
+    left = max(a[0], b[0])
+    top = max(a[1], b[1])
+    right = min(a[2], b[2])
+    bottom = min(a[3], b[3])
+    return max(0.0, right - left) * max(0.0, bottom - top)

@@ -5,15 +5,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple
 
+INTRO_TERM = "\u0432\u0432\u0435\u0434\u0435\u043d\u0438\u0435"
+CONCLUSION_TERM = "\u0437\u0430\u043a\u043b\u044e\u0447"
+APPENDIX_TERM = "\u043f\u0440\u0438\u043b\u043e\u0436"
+
 
 def split_markdown(md_path: Path) -> List[Path]:
     """Split a markdown file into separate chapter files.
 
     Rules:
     - H1 headings (`# `) start a new section.
-    - Section whose title contains "введение" -> Vvedenie.md (first only).
-    - Title containing "заключение" -> Zaklychenie.md (first only).
-    - Title starting with "прилож" -> prilN.md.
+    - The first intro section -> Vvedenie.md.
+    - The first conclusion section -> Zaklychenie.md.
+    - Appendix sections -> prilN.md.
     - All other sections -> gN.md.
     """
 
@@ -42,10 +46,9 @@ def split_markdown(md_path: Path) -> List[Path]:
             current_lines.append(line)
     flush_section()
 
-    # Drop everything before "Введение" if оно есть
     intro_idx = None
     for idx, (title, _) in enumerate(sections):
-        if "введение" in title.lower():
+        if _is_intro(title):
             intro_idx = idx
             break
     if intro_idx is not None:
@@ -58,14 +61,13 @@ def split_markdown(md_path: Path) -> List[Path]:
     concl_written = False
 
     for title, body_lines in sections:
-        lowered = title.lower()
-        if "введение" in lowered and not intro_written:
+        if _is_intro(title) and not intro_written:
             filename = "Vvedenie.md"
             intro_written = True
-        elif lowered.startswith("прилож"):
+        elif _is_appendix(title):
             app_idx += 1
             filename = f"pril{app_idx}.md"
-        elif "заключ" in lowered and not concl_written:
+        elif _is_conclusion(title) and not concl_written:
             filename = "Zaklychenie.md"
             concl_written = True
         else:
@@ -78,3 +80,15 @@ def split_markdown(md_path: Path) -> List[Path]:
         output_paths.append(out_path)
 
     return output_paths
+
+
+def _is_intro(title: str) -> bool:
+    return INTRO_TERM in title.lower()
+
+
+def _is_conclusion(title: str) -> bool:
+    return CONCLUSION_TERM in title.lower()
+
+
+def _is_appendix(title: str) -> bool:
+    return title.lower().startswith(APPENDIX_TERM)

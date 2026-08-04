@@ -7,11 +7,17 @@ import io
 import re
 import itertools
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterator
+from typing import Iterator, List, Optional, Tuple
 
 from PIL import Image
 
 from .extract_text import TextBlock
+
+
+CAPTION_RE = re.compile(
+    "^\\s*(?:(?:fig(?:ure)?|image)\\b\\.?|(?:\\u0440\\u0438\\u0441(?:\\u0443\\u043d\\u043e\\u043a)?|\\u0438\\u043b\\u043b(?:\\u044e\\u0441\\u0442\\u0440\\u0430\\u0446\\u0438\\u044f)?)\\.?)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -81,19 +87,20 @@ def _find_caption(rect, text_blocks: List[TextBlock], page_num: int, img_index: 
         bbox = block.bbox
         if not bbox:
             continue
-        # Below the image
+        caption = _sanitize_caption(block.text)
+        if not _looks_like_caption(caption):
+            continue
         below_distance = bbox[1] - rect.y1
         if 0 <= below_distance <= 40 and _horiz_overlap(bbox, rect):
-            candidates.append((below_distance, block.text))
+            candidates.append((below_distance, caption))
             continue
-        # Above the image
         above_distance = rect.y0 - bbox[3]
         if 0 <= above_distance <= 30 and _horiz_overlap(bbox, rect):
-            candidates.append((above_distance + 1000, block.text))
+            candidates.append((above_distance + 1000, caption))
 
     if candidates:
         candidates.sort(key=lambda item: item[0])
-        return _sanitize_caption(candidates[0][1])
+        return candidates[0][1]
     return default
 
 
@@ -103,8 +110,13 @@ def _horiz_overlap(bbox: Tuple[float, float, float, float], rect) -> bool:
 
 def _sanitize_caption(text: str) -> str:
     text = re.sub(r"^#+\s+", "", text.strip())
+    text = re.sub(r"^\*{1,3}(.+?)\*{1,3}$", r"\1", text)
     text = re.sub(r"\s+", " ", text)
     return text[:120] if text else text
+
+
+def _looks_like_caption(text: str) -> bool:
+    return bool(text and CAPTION_RE.match(text))
 
 
 def _join_rel_path(rel_dir: str, filename: str) -> str:

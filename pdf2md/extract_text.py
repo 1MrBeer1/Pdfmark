@@ -7,8 +7,11 @@ import re
 from statistics import median
 from typing import Iterable, List, Tuple
 
-LIST_ITEM_RE = re.compile(r"^\s*(?:[-*\u2022]|\d+\.)\s+")
-PAGE_NUM_RE = re.compile(r"^(?:стр\.?\s*)?\d{1,4}(?:\s*/\s*\d{1,4})?$", re.IGNORECASE)
+LIST_ITEM_RE = re.compile("^\\s*(?:[-*\\u2022]|\\d+\\.)\\s+")
+PAGE_NUM_RE = re.compile(
+    "^(?:(?:\u0441\u0442\u0440|page|p)\\.?\\s*)?\\d{1,4}(?:\\s*/\\s*\\d{1,4})?$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -206,9 +209,16 @@ def _apply_heading(text: str, level: int) -> str:
     lines = text.splitlines()
     if not lines:
         return text
-    head = lines[0].lstrip("# ").strip()
+    head = _strip_outer_emphasis(lines[0].lstrip("# ").strip())
     lines[0] = f"{'#' * level} {head}"
     return "\n".join(lines)
+
+
+def _strip_outer_emphasis(text: str) -> str:
+    for marker in ("***", "**", "*"):
+        if text.startswith(marker) and text.endswith(marker) and len(text) > len(marker) * 2:
+            return text[len(marker):-len(marker)].strip()
+    return text
 
 
 def _span_style(span: dict) -> tuple[bool, bool]:
