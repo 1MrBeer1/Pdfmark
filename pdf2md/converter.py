@@ -19,6 +19,7 @@ from .postprocess import assemble_page_markdown
 from .report import ConversionReport, PageReport
 
 SUPPORTED_WORD_EXTENSIONS = {".docx", ".docm", ".dotx", ".dotm"}
+SUPPORTED_HTML_EXTENSIONS = {".html", ".htm", ".xhtml"}
 
 
 def convert_file(
@@ -62,9 +63,21 @@ def convert_file(
             logger=logger,
             progress=progress,
         )
+    if suffix in SUPPORTED_HTML_EXTENSIONS:
+        from .html_converter import convert_html
+
+        return convert_html(
+            input_path=input_path,
+            out_path=out_path,
+            assets_dir=assets_dir,
+            md_format=md_format,
+            max_pages=max_pages,
+            logger=logger,
+            progress=progress,
+        )
     if suffix == ".doc":
         raise ConversionError("Legacy .doc files are not supported directly. Save the document as .docx and convert it again.")
-    raise ConversionError(f"Unsupported input file type: {suffix or '<none>'}. Use PDF or Word .docx files.")
+    raise ConversionError(f"Unsupported input file type: {suffix or '<none>'}. Use PDF, Word .docx, or HTML files.")
 
 
 def convert_pdf(

@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from .config import ConversionError, DependencyError, setup_logger
-from .converter import convert_file
+from .converter import SUPPORTED_HTML_EXTENSIONS, convert_file
 from .splitter import split_markdown
 
 app = FastAPI(title="pdf2md")
@@ -116,18 +116,19 @@ INDEX_HTML = """<!DOCTYPE html>
   <div class="wrap">
     <header>
       <h1>pdf2md</h1>
-      <p>Convert PDFs and Word documents to Markdown with inline images and tables.</p>
+      <p>Convert PDFs, Word documents, and HTML files to Markdown with inline images and tables.</p>
     </header>
     <div class="card">
       <form action="/convert" method="post" enctype="multipart/form-data">
-        <label>PDF or Word file
-          <input type="file" name="file" accept="application/pdf,.pdf,.docx,.docm,.dotx,.dotm" required />
+        <label>PDF, Word, or HTML file
+          <input type="file" name="file" accept="application/pdf,text/html,.pdf,.docx,.docm,.dotx,.dotm,.html,.htm,.xhtml" required />
         </label>
         <label>Markdown format
           <select name="md_format">
             <option value="github">github</option>
             <option value="gfm">gfm</option>
             <option value="obsidian">obsidian</option>
+            <option value="vitepress">vitepress</option>
           </select>
         </label>
         <label>OCR mode
@@ -302,7 +303,7 @@ def convert(
     suffix = Path(file.filename or "").suffix.lower()
     input_path = work_dir / f"input{suffix or '.pdf'}"
     out_path = work_dir / "output.md"
-    assets_dir = work_dir / "media"
+    assets_dir = work_dir / ("image" if suffix in SUPPORTED_HTML_EXTENSIONS else "media")
 
     with input_path.open("wb") as f:
         f.write(file.file.read())
@@ -332,7 +333,10 @@ def convert(
         error_text = html.escape(f"Unexpected error: {exc}")
         return ERROR_TEMPLATE.safe_substitute(error=error_text, log=log_text)
 
-    split_files = split_markdown(out_path)
+    split_files = split_markdown(
+        out_path,
+        document_title=Path(file.filename or "Методическое пособие").stem,
+    )
 
     zip_path = work_dir / "result.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:

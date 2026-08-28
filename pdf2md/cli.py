@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from tqdm import tqdm
 
-from .config import ConversionError, DependencyError, resolve_output_paths, setup_logger
+from .config import ConversionError, DependencyError, SUPPORTED_FORMATS, resolve_output_paths, setup_logger
 from .converter import convert_file
 from .splitter import split_markdown
 
@@ -16,16 +16,16 @@ EXIT_DEPENDENCY = 2
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Convert PDF or Word documents to Markdown with images and tables.")
-    parser.add_argument("input", help="Input PDF or Word .docx path")
+    parser = argparse.ArgumentParser(description="Convert PDF, Word, or HTML documents to Markdown with images and tables.")
+    parser.add_argument("input", help="Input PDF, Word .docx, or HTML path")
     parser.add_argument("--out", dest="out", help="Output Markdown path")
-    parser.add_argument("--assets", dest="assets", help="Assets directory path")
-    parser.add_argument("--format", dest="md_format", choices=["github", "gfm", "obsidian"], default="github")
+    parser.add_argument("--assets", dest="assets", help="Assets directory (default: media; HTML always uses ./image)")
+    parser.add_argument("--format", dest="md_format", choices=sorted(SUPPORTED_FORMATS), default="github")
     parser.add_argument("--dpi", type=int, default=200, help="PDF render DPI for images/tables/OCR")
     parser.add_argument("--ocr", choices=["auto", "off", "always"], default="auto", help="PDF OCR mode")
     parser.add_argument("--max-pages", type=int, default=None, help="PDF page limit")
     parser.add_argument("--keep-temp", action="store_true")
-    parser.add_argument("--split", action="store_true", help="Split the output Markdown by H1 headings")
+    parser.add_argument("--split", action="store_true", help="Split by H1 headings and generate index.md")
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.out) if args.out else None,
             Path(args.assets) if args.assets else None,
         )
-        split_files = split_markdown(out_path)
+        split_files = split_markdown(out_path, document_title=Path(args.input).stem)
         print("split files:")
         for split_file in split_files:
             print(f"- {split_file}")

@@ -8,7 +8,7 @@ from typing import Optional, TextIO
 import logging
 import sys
 
-SUPPORTED_FORMATS = {"github", "gfm", "obsidian"}
+SUPPORTED_FORMATS = {"github", "gfm", "obsidian", "vitepress"}
 SUPPORTED_OCR = {"auto", "off", "always"}
 
 

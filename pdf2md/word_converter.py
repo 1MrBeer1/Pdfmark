@@ -12,6 +12,8 @@ import zipfile
 from typing import Iterator, Optional
 import xml.etree.ElementTree as ET
 
+from .anchors import HeadingAnchorGenerator
+from .code_blocks import CodeLanguageTracker, format_fenced_code
 from .config import ConversionError, SUPPORTED_FORMATS, resolve_output_paths
 from .postprocess import format_image_link
 from .report import ConversionReport, PageReport
@@ -33,6 +35,22 @@ ORDERED_NUMBER_FORMATS = {
     "ordinal",
     "cardinalText",
 }
+MONOSPACE_FONT_TERMS = {
+    "cascadia code",
+    "cascadia mono",
+    "consolas",
+    "courier",
+    "courier new",
+    "dejavu sans mono",
+    "fira code",
+    "jetbrains mono",
+    "liberation mono",
+    "lucida console",
+    "monospace",
+    "roboto mono",
+    "source code pro",
+}
+CODE_STYLE_TERMS = ("code", "sourcecode", "programcode", "terminal", "console", "shell", "command", "код", "листинг")
 
 
 @dataclass
@@ -154,11 +172,30 @@ def convert_docx(
             )
 
             markdown_parts: list[str] = []
+            heading_anchors = HeadingAnchorGenerator()
+            code_languages = CodeLanguageTracker()
+            code_lines: list[str] = []
             tables_count = 0
+
+            def flush_code_lines() -> None:
+                while code_lines and not code_lines[0].strip():
+                    code_lines.pop(0)
+                while code_lines and not code_lines[-1].strip():
+                    code_lines.pop()
+                if code_lines:
+                    code = "\n".join(code_lines)
+                    markdown_parts.append(format_fenced_code(code, code_languages.resolve(code)))
+                code_lines.clear()
+
             body = document.find(f"{W}body")
             if body is not None:
                 for child in body:
                     if child.tag == f"{W}p":
+                        code_line = _paragraph_code_line(child, styles)
+                        if code_line is not None:
+                            code_lines.append(code_line)
+                            continue
+                        flush_code_lines()
                         paragraph_md = _paragraph_to_markdown(
                             child,
                             relationships,
@@ -166,14 +203,17 @@ def convert_docx(
                             numbering,
                             image_extractor,
                             md_format,
+                            heading_anchors,
                         )
                         if paragraph_md:
                             markdown_parts.append(paragraph_md)
                     elif child.tag == f"{W}tbl":
+                        flush_code_lines()
                         table_md = _table_to_markdown(child, md_format)
                         if table_md:
                             tables_count += 1
                             markdown_parts.append(table_md)
+                flush_code_lines()
 
             markdown = "\n\n".join(markdown_parts).strip()
             out_path.write_text((markdown + "\n") if markdown else "", encoding="utf-8")
@@ -215,6 +255,7 @@ def _paragraph_to_markdown(
     numbering: Numbering,
     image_extractor: ImageExtractor,
     md_format: str,
+    heading_anchors: HeadingAnchorGenerator,
 ) -> str:
     parts: list[str] = []
     for child in paragraph:
@@ -230,7 +271,11 @@ def _paragraph_to_markdown(
     p_pr = paragraph.find(f"{W}pPr")
     heading_level = _paragraph_heading_level(p_pr, styles)
     if heading_level:
-        return f"{'#' * heading_level} {_strip_outer_emphasis(content)}"
+        heading_text = _strip_outer_emphasis(content)
+        heading = f"{'#' * heading_level} {heading_text}"
+        if heading_level >= 2:
+            heading = f"{heading} {{#{heading_anchors.make(heading_text)}}}"
+        return heading
 
     numbering_info = _paragraph_numbering(p_pr)
     if numbering_info:
@@ -245,6 +290,67 @@ def _paragraph_to_markdown(
         return f"- {content}"
 
     return content
+
+
+def _paragraph_code_line(
+    paragraph: ET.Element,
+    styles: dict[str, ParagraphStyle],
+) -> str | None:
+    p_pr = paragraph.find(f"{W}pPr")
+    if _paragraph_heading_level(p_pr, styles) or _paragraph_numbering(p_pr):
+        return None
+
+    style_id = _paragraph_style_id(p_pr)
+    style = styles.get(style_id or "")
+    if _looks_like_code_style(style_id or "", style.name if style else ""):
+        return _paragraph_raw_text(paragraph).rstrip()
+
+    text_runs = [(run, _run_text(run)) for run in paragraph.iter(f"{W}r")]
+    formatted_runs = [(run, text) for run, text in text_runs if text]
+    if not formatted_runs or not all(_run_is_monospace(run) for run, _ in formatted_runs):
+        return None
+    if not any(text.strip() for _, text in formatted_runs) and not _paragraph_raw_text(paragraph):
+        return None
+    return _paragraph_raw_text(paragraph).rstrip()
+
+
+def _looks_like_code_style(style_id: str, style_name: str) -> bool:
+    normalized = re.sub(r"[\s_-]+", "", f"{style_id} {style_name}").casefold()
+    return any(term in normalized for term in CODE_STYLE_TERMS)
+
+
+def _run_is_monospace(run: ET.Element) -> bool:
+    r_pr = run.find(f"{W}rPr")
+    if r_pr is None:
+        return False
+
+    run_style = r_pr.find(f"{W}rStyle")
+    if run_style is not None:
+        style_id = run_style.get(f"{W}val") or ""
+        if _looks_like_code_style(style_id, ""):
+            return True
+
+    fonts = r_pr.find(f"{W}rFonts")
+    if fonts is None:
+        return False
+    font_names = {
+        value.strip().casefold()
+        for value in fonts.attrib.values()
+        if value and not value.strip().casefold().endswith("theme")
+    }
+    return bool(font_names.intersection(MONOSPACE_FONT_TERMS))
+
+
+def _paragraph_raw_text(paragraph: ET.Element) -> str:
+    parts: list[str] = []
+    for item in paragraph.iter():
+        if item.tag == f"{W}t":
+            parts.append(item.text or "")
+        elif item.tag == f"{W}tab":
+            parts.append("\t")
+        elif item.tag == f"{W}br":
+            parts.append("\n")
+    return "".join(parts).replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _run_to_markdown(run: ET.Element, image_extractor: ImageExtractor, md_format: str) -> str:
