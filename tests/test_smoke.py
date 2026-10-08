@@ -469,3 +469,16 @@ def test_splitter_skips_preface(tmp_path: Path) -> None:
     chapter_text = (tmp_path / "g1.md").read_text(encoding="utf-8")
     assert "## 1.1. \u041f\u043e\u0434\u0433\u043b\u0430\u0432\u0430" in chapter_text
     assert "### 1.1.1. \u041f\u0443\u043d\u043a\u0442" in chapter_text
+
+
+
+
+
+
+n= int (input())
+a=sorted(map(int,input().split()))
+
+if a[0]+a[1]==a[2] and all(x==a[2]for x in a[2:]):
+    print("YES")
+else: 
+    print("NO")
